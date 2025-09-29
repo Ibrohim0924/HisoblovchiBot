@@ -1,0 +1,25 @@
+-- Foydalanuvchilar jadvali
+CREATE TABLE users (
+    telegram_id BIGINT PRIMARY KEY,
+    first_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Daromadlar jadvali
+CREATE TABLE incomes (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    source VARCHAR(255) NOT NULL,
+    amount NUMERIC(15, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Xarajatlar jadvali
+CREATE TABLE expenses (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    name VARCHAR(255) NOT NULL,
+    amount NUMERIC(15, 2) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
