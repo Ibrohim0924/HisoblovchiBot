@@ -21,7 +21,6 @@ const helpText = `👋 Xush kelibsiz! Bu moliyaviy hisobotlar botiga!
 🔍 Asosiy buyruqlar:
 /start - Botni ishga tushirish
 /help - Yordam olish
-/balance - Joriy balansni ko'rish
 /cancel - Joriy amalni bekor qilish
 
 💡 Maslahat: 
