@@ -6,28 +6,37 @@ const db = require('./db');
 const bot = new Bot(process.env.BOT_TOKEN);
 
 // Session va Conversation middleware'larini o'rnatish
-bot.use(session({ initial: () => ({ mainMenuMessageId: null }) }));
+bot.use(session({ initial: () => ({}) }));
 bot.use(conversations());
 
-// --- Suhbatlar (Conversations) ---
+// --- Asosiy Menyu ---
+const mainMenuText = (firstName) => `Assalomu alaykum, ${firstName}! Shaxsiy moliya botiga xush kelibsiz!\n\nQuyidagi amallardan birini tanlang:`;
+const mainMenu = new InlineKeyboard()
+    .text("💸 Xarajat qo'shish", "add_expense_action").row()
+    .text("💰 Daromad qo'shish", "add_income_action").row()
+    .text("📊 Balansni ko'rish", "balance_action").row()
+    .text("📈 Hisobot", "report_action");
 
-// Xarajat qo'shish suhbati
+async function sendOrEditMainMenu(ctx) {
+    const text = mainMenuText(ctx.from.first_name);
+    if (ctx.callbackQuery) {
+        // Agar tugma bosilgan bo'lsa, eski xabarni tahrirlaymiz
+        await ctx.editMessageText(text, { reply_markup: mainMenu }).catch(console.error);
+    } else {
+        // Agar buyruq kelsa, yangi xabar yuboramiz
+        await ctx.reply(text, { reply_markup: mainMenu });
+    }
+}
+
+// --- Suhbatlar (Conversations) ---
 async function addExpenseConversation(conversation, ctx) {
     try {
-        await ctx.reply("Xarajat nomini kiriting (yoki jarayonni bekor qilish uchun /cancel deb yozing):");
+        await ctx.reply("Xarajat nomini kiriting (bekor qilish uchun /cancel):");
         let nameCtx = await conversation.waitFor('message:text');
-        if (nameCtx.message.text === '/cancel') {
-            await ctx.reply("Jarayon bekor qilindi.", { reply_markup: { remove_keyboard: true } });
-            return;
-        }
         const name = nameCtx.message.text;
 
         await ctx.reply("Summasini kiriting (faqat raqam):");
         let amountCtx = await conversation.waitFor('message:text');
-        if (amountCtx.message.text === '/cancel') {
-            await ctx.reply("Jarayon bekor qilindi.", { reply_markup: { remove_keyboard: true } });
-            return;
-        }
         const amount = parseFloat(amountCtx.message.text.replace(',', '.'));
 
         if (isNaN(amount) || amount <= 0) {
@@ -40,36 +49,32 @@ async function addExpenseConversation(conversation, ctx) {
         categories.forEach(cat => keyboard.text(cat).row());
         await ctx.reply("Kategoriyani tanlang:", { reply_markup: keyboard });
         
-        const categoryCtx = await conversation.waitFor('message:text', (ctx) => categories.includes(ctx.message.text));
+        const categoryCtx = await conversation.waitFor('message:text');
         const category = categoryCtx.message.text;
 
+        if (!categories.includes(category)) {
+            await ctx.reply("Iltimos, taqdim etilgan tugmalardan birini bosing. Jarayon bekor qilindi.", { reply_markup: { remove_keyboard: true } });
+            return;
+        }
+
         await db.addExpense(ctx.from.id, name, amount, category);
-        await ctx.reply(`✅ "${name}" nomli ${amount.toLocaleString('uz-UZ')} so'mlik xarajat "${category}" kategoriyasiga qo'shildi.`, {
-            reply_markup: { remove_keyboard: true },
-        });
+        await ctx.reply(`✅ Xarajat muvaffaqiyatli qo'shildi!`, { reply_markup: { remove_keyboard: true } });
+
     } catch (e) {
-        console.error("Conversation cancelled or timed out:", e);
-        await ctx.reply("Jarayon vaqtida xatolik yuz berdi yoki bekor qilindi.", { reply_markup: { remove_keyboard: true } });
+        await ctx.reply("Jarayon bekor qilindi yoki vaqt tugadi.", { reply_markup: { remove_keyboard: true } });
+    } finally {
+        await sendOrEditMainMenu(ctx);
     }
 }
 
-// Daromad qo'shish suhbati
 async function addIncomeConversation(conversation, ctx) {
     try {
-        await ctx.reply("Daromad manbasini kiriting (yoki jarayonni bekor qilish uchun /cancel deb yozing):");
+        await ctx.reply("Daromad manbasini kiriting (bekor qilish uchun /cancel):");
         let sourceCtx = await conversation.waitFor('message:text');
-        if (sourceCtx.message.text === '/cancel') {
-            await ctx.reply("Jarayon bekor qilindi.");
-            return;
-        }
         const source = sourceCtx.message.text;
 
         await ctx.reply("Summasini kiriting (faqat raqam):");
         let amountCtx = await conversation.waitFor('message:text');
-        if (amountCtx.message.text === '/cancel') {
-            await ctx.reply("Jarayon bekor qilindi.");
-            return;
-        }
         const amount = parseFloat(amountCtx.message.text.replace(',', '.'));
 
         if (isNaN(amount) || amount <= 0) {
@@ -78,50 +83,31 @@ async function addIncomeConversation(conversation, ctx) {
         }
 
         await db.addIncome(ctx.from.id, source, amount);
-        await ctx.reply(`✅ "${source}" manbasidan ${amount.toLocaleString('uz-UZ')} so'mlik daromad qo'shildi.`);
+        await ctx.reply(`✅ Daromad muvaffaqiyatli qo'shildi!`);
     } catch (e) {
-        console.error("Conversation cancelled or timed out:", e);
-        await ctx.reply("Jarayon vaqtida xatolik yuz berdi yoki bekor qilindi.");
+        await ctx.reply("Jarayon bekor qilindi yoki vaqt tugadi.");
+    } finally {
+        await sendOrEditMainMenu(ctx);
     }
 }
 
 bot.use(createConversation(addExpenseConversation));
 bot.use(createConversation(addIncomeConversation));
 
-// --- Asosiy Menyu ---
-
-const mainMenu = new InlineKeyboard()
-    .text("💸 Xarajat qo'shish", "add_expense_action").row()
-    .text("💰 Daromad qo'shish", "add_income_action").row()
-    .text("📊 Balansni ko'rish", "balance_action").row()
-    .text("📈 Hisobot", "report_action");
-
-async function sendMainMenu(ctx) {
-    const text = `Assalomu alaykum, ${ctx.from.first_name}! Shaxsiy moliya botiga xush kelibsiz!\n\nQuyidagi amallardan birini tanlang:`;
-    const sentMessage = await ctx.reply(text, { reply_markup: mainMenu });
-    ctx.session.mainMenuMessageId = sentMessage.message_id;
-}
-
 // --- Buyruq Handler'lari ---
-
 bot.command("start", async (ctx) => {
     await ctx.conversation.exit();
-    if (ctx.session.mainMenuMessageId) {
-        await ctx.api.deleteMessage(ctx.chat.id, ctx.session.mainMenuMessageId).catch(console.error);
-    }
     await db.findOrCreateUser(ctx.from.id, ctx.from.first_name);
-    await sendMainMenu(ctx);
+    await sendOrEditMainMenu(ctx);
 });
 
 bot.command("cancel", async (ctx) => {
     await ctx.conversation.exit();
-    await ctx.reply("Barcha amallar bekor qilindi. Bosh menyuga qaytish uchun /start bosing.", {
-        reply_markup: { remove_keyboard: true },
-    });
+    await ctx.reply("Barcha amallar bekor qilindi.");
+    await sendOrEditMainMenu(ctx);
 });
 
 // --- Tugma Handler'lari (Callback Queries) ---
-
 bot.callbackQuery("add_expense_action", async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.editMessageText("💸 Xarajat qo'shish jarayoni boshlandi...");
@@ -137,31 +123,25 @@ bot.callbackQuery("add_income_action", async (ctx) => {
 bot.callbackQuery("balance_action", async (ctx) => {
     await ctx.answerCallbackQuery({ text: "⏳ Balans hisoblanmoqda..." });
     const { totalIncome, totalExpense, balance } = await db.getBalance(ctx.from.id);
-    await ctx.editMessageText(
-        `<b>📊 Umumiy Balans</b>\n\n` +
-        `⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n` +
-        `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n\n` +
-        `💰 Sof balans: <b>${balance.toLocaleString('uz-UZ')} so'm</b>\n\n` +
-        `Quyidagi amallardan birini tanlang:`,
-        { parse_mode: "HTML", reply_markup: mainMenu }
-    );
+    const text = `<b>📊 Umumiy Balans</b>\n\n` +
+                 `⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n` +
+                 `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n\n` +
+                 `💰 Sof balans: <b>${balance.toLocaleString('uz-UZ')} so'm</b>\n\n` +
+                 `Quyidagi amallardan birini tanlang:`;
+    await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: mainMenu });
 });
 
 bot.callbackQuery("report_action", async (ctx) => {
     await ctx.answerCallbackQuery();
     const keyboard = new InlineKeyboard()
-        .text("Haftalik", "report_week")
-        .text("Oylik", "report_month").row()
-        .text("⬅️ Orqaga", "back_to_main");
+        .text("Haftalik", "report_week").text("Oylik", "report_month").row()
+        .text("⬅️ Asosiy menyu", "back_to_main");
     await ctx.editMessageText("Qaysi davr uchun hisobot kerak?", { reply_markup: keyboard });
 });
 
 bot.callbackQuery("back_to_main", async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(
-        "Asosiy menyu. Quyidagi amallardan birini tanlang:",
-        { reply_markup: mainMenu }
-    );
+    await sendOrEditMainMenu(ctx);
 });
 
 bot.callbackQuery(/report_(week|month)/, async (ctx) => {
@@ -170,7 +150,6 @@ bot.callbackQuery(/report_(week|month)/, async (ctx) => {
     const { expensesByCategory, totalIncome, totalExpense, netBalance } = await db.getReport(ctx.from.id, period);
 
     let reportText = `<b>📈 ${period === 'week' ? 'Haftalik' : 'Oylik'} Hisobot</b>\n\n`;
-    
     if (expensesByCategory.length > 0) {
         reportText += "<b>Xarajatlar kategoriyalar bo'yicha:</b>\n";
         expensesByCategory.forEach(item => {
@@ -179,7 +158,6 @@ bot.callbackQuery(/report_(week|month)/, async (ctx) => {
     } else {
         reportText += "Bu davrda xarajatlar bo'lmagan.\n";
     }
-
     reportText += `\n⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n`;
     reportText += `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n`;
     reportText += `💰 Sof balans: <b>${netBalance.toLocaleString('uz-UZ')} so'm</b>\n\n`;
@@ -189,9 +167,10 @@ bot.callbackQuery(/report_(week|month)/, async (ctx) => {
 });
 
 // --- Xatoliklarni ushlash ---
-bot.catch((err) => {
+bot.catch(async (err) => {
     const ctx = err.ctx;
     console.error(`Error while handling update ${ctx.update.update_id}:`, err.error);
+    await ctx.reply("Xatolik yuz berdi. Iltimos, /start buyrug'ini yuborib, qaytadan urunib ko'ring.").catch(console.error);
 });
 
 // Botni ishga tushirish
