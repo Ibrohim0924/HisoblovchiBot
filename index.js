@@ -8,6 +8,56 @@ const bot = new Bot(process.env.BOT_TOKEN);
 bot.use(session({ initial: () => ({}) }));
 bot.use(conversations());
 
+// Start va help komandalari uchun qo'llanma
+const helpText = `👋 Xush kelibsiz! Bu moliyaviy hisobotlar botiga!
+
+📝 Bot imkoniyatlari:
+1. 💸 Xarajatlarni qo'shish va kuzatish
+2. 💰 Daromadlarni qo'shish va kuzatish
+3. 📊 Joriy balansni ko'rish
+4. 📈 Kunlik/Oylik hisobotlarni olish
+5. ⚙️ Xarajat limitini o'rnatish
+
+🔍 Asosiy buyruqlar:
+/start - Botni ishga tushirish
+/help - Yordam olish
+/balance - Joriy balansni ko'rish
+/cancel - Joriy amalni bekor qilish
+
+💡 Maslahat: 
+- Xarajat va daromadlarni muntazam kiritib boring
+- Xarajat limitini o'rnatish orqali ortiqcha xarajatlarni nazorat qiling
+- Hisobotlarni ko'rib chiqish orqali moliyaviy holatni tahlil qiling
+
+Boshlash uchun quyidagi menyudan kerakli bo'limni tanlang! 👇`;
+
+bot.command(["start", "help"], async (ctx) => {
+    const helpText = `👋 Xush kelibsiz! Bu moliyaviy hisobotlar botiga!
+
+📝 Bot imkoniyatlari:
+1. 💸 Xarajatlarni qo'shish va kuzatish
+2. 💰 Daromadlarni qo'shish va kuzatish
+3. 📊 Joriy balansni ko'rish
+4. 📈 Kunlik/Oylik hisobotlarni olish
+5. ⚙️ Xarajat limitini o'rnatish
+
+🔍 Asosiy buyruqlar:
+/start - Botni ishga tushirish
+/help - Yordam olish
+/balance - Joriy balansni ko'rish
+/cancel - Joriy amalni bekor qilish
+
+💡 Maslahat: 
+- Xarajat va daromadlarni muntazam kiritib boring
+- Xarajat limitini o'rnatish orqali ortiqcha xarajatlarni nazorat qiling
+- Hisobotlarni ko'rib chiqish orqali moliyaviy holatni tahlil qiling
+
+Boshlash uchun quyidagi menyudan kerakli bo'limni tanlang! 👇`;
+
+    await ctx.reply(helpText);
+    await showMainMenu(ctx);
+});
+
 // --- Asosiy Menyu ---
 const mainMenuText = (firstName) => `👋 Assalomu alaykum, ${firstName}!\n\nQuyidagi amallardan birini tanlang:`;
 const mainMenu = new InlineKeyboard()
