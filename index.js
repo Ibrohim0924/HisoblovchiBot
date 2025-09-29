@@ -22,7 +22,7 @@ async function addExpenseConversation(conversation, ctx) {
     const amount = parseFloat(amountCtx.message.text.replace(',', '.'));
 
     if (isNaN(amount) || amount <= 0) {
-        await ctx.reply("Noto'g'ri summa kiritildi. Iltimos, musbat raqam kiriting.");
+        await ctx.reply("Noto'g'ri summa kiritildi. Iltimos, musbat raqam kiriting. Jarayon bekor qilindi.");
         return;
     }
 
@@ -31,13 +31,10 @@ async function addExpenseConversation(conversation, ctx) {
     categories.forEach(cat => keyboard.text(cat).row());
     await ctx.reply("Kategoriyani tanlang:", { reply_markup: keyboard });
     
-    const categoryCtx = await conversation.waitFor('message:text');
+    const categoryCtx = await conversation.waitFor('message:text', (ctx) => {
+        return categories.includes(ctx.message.text);
+    });
     const category = categoryCtx.message.text;
-
-    if (!categories.includes(category)) {
-        await ctx.reply("Iltimos, quyidagi kategoriyalardan birini tanlang.", { reply_markup: { remove_keyboard: true } });
-        return;
-    }
 
     await db.addExpense(ctx.from.id, name, amount, category);
     await ctx.reply(`✅ "${name}" nomli ${amount.toLocaleString('uz-UZ')} so'mlik xarajat "${category}" kategoriyasiga qo'shildi.`, {
@@ -56,7 +53,7 @@ async function addIncomeConversation(conversation, ctx) {
     const amount = parseFloat(amountCtx.message.text.replace(',', '.'));
 
     if (isNaN(amount) || amount <= 0) {
-        await ctx.reply("Noto'g'ri summa kiritildi. Iltimos, musbat raqam kiriting.");
+        await ctx.reply("Noto'g'ri summa kiritildi. Iltimos, musbat raqam kiriting. Jarayon bekor qilindi.");
         return;
     }
 
@@ -79,41 +76,14 @@ const mainMenu = new InlineKeyboard()
 
 // /start buyrug'i
 bot.command("start", async (ctx) => {
+    // Har qanday ochiq suhbatni bekor qilish
+    await ctx.conversation.exit();
+    
     await db.findOrCreateUser(ctx.from.id, ctx.from.first_name);
     await ctx.reply(
         `Assalomu alaykum, ${ctx.from.first_name}! Shaxsiy moliya botiga xush kelibsiz!\n\nQuyidagi amallardan birini tanlang:`,
         { reply_markup: mainMenu }
     );
-});
-
-// /add_expense buyrug'i (qo'shimcha qulaylik uchun)
-bot.command("add_expense", async (ctx) => {
-    await ctx.conversation.enter("addExpenseConversation");
-});
-
-// /add_income buyrug'i (qo'shimcha qulaylik uchun)
-bot.command("add_income", async (ctx) => {
-    await ctx.conversation.enter("addIncomeConversation");
-});
-
-// /balance buyrug'i (qo'shimcha qulaylik uchun)
-bot.command("balance", async (ctx) => {
-    const { totalIncome, totalExpense, balance } = await db.getBalance(ctx.from.id);
-    await ctx.reply(
-        `<b>📊 Umumiy Balans</b>\n\n` +
-        `⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n` +
-        `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n\n` +
-        `💰 Sof balans: <b>${balance.toLocaleString('uz-UZ')} so'm</b>`,
-        { parse_mode: "HTML" }
-    );
-});
-
-// /report buyrug'i (qo'shimcha qulaylik uchun)
-bot.command("report", async (ctx) => {
-    const keyboard = new InlineKeyboard()
-        .text("Haftalik", "report_week")
-        .text("Oylik", "report_month");
-    await ctx.reply("Qaysi davr uchun hisobot kerak?", { reply_markup: keyboard });
 });
 
 // --- Tugma Handler'lari (Callback Queries) ---
@@ -132,16 +102,16 @@ bot.callbackQuery("add_income_action", async (ctx) => {
 
 // Balansni ko'rish tugmasi
 bot.callbackQuery("balance_action", async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery({ text: "⏳ Balans hisoblanmoqda..." });
     const { totalIncome, totalExpense, balance } = await db.getBalance(ctx.from.id);
-    await ctx.reply(
+    await ctx.editMessageText(
         `<b>📊 Umumiy Balans</b>\n\n` +
         `⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n` +
         `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n\n` +
-        `💰 Sof balans: <b>${balance.toLocaleString('uz-UZ')} so'm</b>`,
-        { parse_mode: "HTML" }
+        `💰 Sof balans: <b>${balance.toLocaleString('uz-UZ')} so'm</b>\n\n` +
+        `Quyidagi amallardan birini tanlang:`,
+        { parse_mode: "HTML", reply_markup: mainMenu }
     );
-    await ctx.reply("Boshqa amalni tanlang:", { reply_markup: mainMenu });
 });
 
 // Hisobot tugmasi
@@ -149,13 +119,23 @@ bot.callbackQuery("report_action", async (ctx) => {
     await ctx.answerCallbackQuery();
     const keyboard = new InlineKeyboard()
         .text("Haftalik", "report_week")
-        .text("Oylik", "report_month");
-    await ctx.reply("Qaysi davr uchun hisobot kerak?", { reply_markup: keyboard });
+        .text("Oylik", "report_month").row()
+        .text("⬅️ Orqaga", "back_to_main");
+    await ctx.editMessageText("Qaysi davr uchun hisobot kerak?", { reply_markup: keyboard });
+});
+
+// Orqaga tugmasi
+bot.callbackQuery("back_to_main", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(
+        "Asosiy menyu. Quyidagi amallardan birini tanlang:",
+        { reply_markup: mainMenu }
+    );
 });
 
 // Hisobot davrini tanlash tugmasi
 bot.callbackQuery(/report_(week|month)/, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery({ text: "⏳ Hisobot tayyorlanmoqda..." });
     const period = ctx.match[1];
     const { expensesByCategory, totalIncome, totalExpense, netBalance } = await db.getReport(ctx.from.id, period);
 
@@ -172,11 +152,10 @@ bot.callbackQuery(/report_(week|month)/, async (ctx) => {
 
     reportText += `\n⬆️ Umumiy daromad: ${totalIncome.toLocaleString('uz-UZ')} so'm\n`;
     reportText += `⬇️ Umumiy xarajat: ${totalExpense.toLocaleString('uz-UZ')} so'm\n`;
-    reportText += `💰 Sof balans: <b>${netBalance.toLocaleString('uz-UZ')} so'm</b>`;
+    reportText += `💰 Sof balans: <b>${netBalance.toLocaleString('uz-UZ')} so'm</b>\n\n`;
+    reportText += `Quyidagi amallardan birini tanlang:`;
 
-    // editMessageText o'rniga reply ishlatamiz, chunki avvalgi xabar "Qaysi davr..." edi
-    await ctx.reply(reportText, { parse_mode: "HTML" });
-    await ctx.reply("Boshqa amalni tanlang:", { reply_markup: mainMenu });
+    await ctx.editMessageText(reportText, { parse_mode: "HTML", reply_markup: mainMenu });
 });
 
 
