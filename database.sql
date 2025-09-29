@@ -27,8 +27,9 @@ CREATE TABLE expenses (
 -- Xarajat cheklovi jadvali
 CREATE TABLE expense_limits (
     id SERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id) UNIQUE,
     monthly_limit NUMERIC(15, 2) NOT NULL,
     notification_sent BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
