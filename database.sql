@@ -23,3 +23,12 @@ CREATE TABLE expenses (
     category VARCHAR(100) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Xarajat cheklovi jadvali
+CREATE TABLE expense_limits (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    monthly_limit NUMERIC(15, 2) NOT NULL,
+    notification_sent BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
