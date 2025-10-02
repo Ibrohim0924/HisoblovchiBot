@@ -38,6 +38,22 @@ async function addExpense(userId, name, amount, category) {
     );
 }
 
+async function resetBalance(userId) {
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM incomes WHERE user_id = $1', [userId]);
+        await client.query('DELETE FROM expenses WHERE user_id = $1', [userId]);
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 async function getBalance(userId) {
     const result = await pool.query(`
         SELECT
@@ -177,6 +193,7 @@ module.exports = {
     findOrCreateUser,
     addIncome,
     addExpense,
+    resetBalance,
     getBalance,
     getReport,
     setExpenseLimit,

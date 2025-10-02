@@ -63,6 +63,7 @@ const mainMenu = new InlineKeyboard()
     .text("💰 Daromad qo'shish", "add_income_action").row()
     .text("📊 Balansni ko'rish", "balance_action").row()
     .text("📈 Hisobot", "report_action").row()
+    .text("♻️ Balansni tozalash", "reset_balance_action").row()
     .text("⚙️ Xarajat limitini sozlash", "set_limit_action");
 
 async function showMainMenu(ctx, editMessage = false) {
@@ -262,6 +263,22 @@ bot.on("callback_query:data", async (ctx) => {
                     .text("Oylik", "report_month").row()
                     .text("⬅️ Orqaga", "back_to_main");
                 await ctx.reply("Qaysi davr uchun hisobot kerak?", { reply_markup: reportKeyboard });
+                break;
+
+            case "reset_balance_action":
+                const confirmResetKeyboard = new InlineKeyboard()
+                    .text("✅ Ha, tozalash", "confirm_reset_balance").row()
+                    .text("⬅️ Bekor qilish", "back_to_main");
+                await ctx.reply("Balansingizdagi barcha daromad va xarajat yozuvlari o'chiriladi. Davom etasizmi?", {
+                    reply_markup: confirmResetKeyboard
+                });
+                break;
+
+            case "confirm_reset_balance":
+                await ctx.conversation.exit().catch(() => {});
+                await db.resetBalance(ctx.from.id);
+                await ctx.reply("♻️ Balansingiz nolga qaytarildi. Endi qaytadan ma'lumot kiritishingiz mumkin.");
+                await showMainMenu(ctx);
                 break;
 
             case "set_limit_action":
