@@ -17,7 +17,24 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
+let languageColumnEnsured = false;
+
+async function ensureLanguageColumn() {
+    if (languageColumnEnsured) {
+        return;
+    }
+    try {
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'uz'");
+        await pool.query("UPDATE users SET language = 'uz' WHERE language IS NULL");
+    } catch (error) {
+        console.error("Til ustuni yaratishda xatolik:", error);
+    } finally {
+        languageColumnEnsured = true;
+    }
+}
+
 async function findOrCreateUser(userId, firstName) {
+    await ensureLanguageColumn();
     const res = await pool.query('SELECT telegram_id, first_name FROM users WHERE telegram_id = $1', [userId]);
     if (res.rowCount === 0) {
         await pool.query('INSERT INTO users (telegram_id, first_name) VALUES ($1, $2)', [userId, firstName]);
@@ -27,11 +44,13 @@ async function findOrCreateUser(userId, firstName) {
 }
 
 async function getUserLanguage(userId) {
+    await ensureLanguageColumn();
     const res = await pool.query('SELECT language FROM users WHERE telegram_id = $1', [userId]);
     return res.rows[0]?.language || null;
 }
 
 async function setUserLanguage(userId, language) {
+    await ensureLanguageColumn();
     await pool.query('UPDATE users SET language = $1 WHERE telegram_id = $2', [language, userId]);
 }
 
