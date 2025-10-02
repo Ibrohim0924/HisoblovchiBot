@@ -27,7 +27,7 @@ const helpText = `👋 Xush kelibsiz! Bu moliyaviy hisobotlar botiga!
 - Xarajat va daromadlarni muntazam kiritib boring
 - Xarajat limitini o'rnatish orqali ortiqcha xarajatlarni nazorat qiling
 - Hisobotlarni ko'rib chiqish orqali moliyaviy holatni tahlil qiling
-
+    
 Boshlash uchun quyidagi menyudan kerakli bo'limni tanlang! 👇`;
 
 bot.command(["start", "help"], async (ctx) => {

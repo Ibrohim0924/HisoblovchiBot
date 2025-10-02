@@ -1,6 +1,14 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const toNumber = (value) => {
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+};
+
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
@@ -31,18 +39,29 @@ async function addExpense(userId, name, amount, category) {
 }
 
 async function getBalance(userId) {
-    const incomeRes = await pool.query('SELECT SUM(amount) as total FROM incomes WHERE user_id = $1', [userId]);
-    const expenseRes = await pool.query('SELECT SUM(amount) as total FROM expenses WHERE user_id = $1', [userId]);
-    
-    const totalIncome = parseFloat(incomeRes.rows[0].total) || 0;
-    const totalExpense = parseFloat(expenseRes.rows[0].total) || 0;
-    
-    return { totalIncome, totalExpense, balance: totalIncome - totalExpense };
+    const result = await pool.query(`
+        SELECT
+            COALESCE(SUM(CASE WHEN type = 'income' THEN amount END), 0) AS total_income,
+            COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) AS total_expense,
+            COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) AS balance
+        FROM (
+            SELECT amount, 'income'::text AS type FROM incomes WHERE user_id = $1
+            UNION ALL
+            SELECT amount, 'expense'::text AS type FROM expenses WHERE user_id = $1
+        ) movements
+    `, [userId]);
+
+    const row = result.rows[0] || {};
+    const totalIncome = toNumber(row.total_income);
+    const totalExpense = toNumber(row.total_expense);
+    const balance = toNumber(row.balance);
+
+    return { totalIncome, totalExpense, balance };
 }
 
 async function getReport(userId, period = 'month') {
     const interval = period === 'week' ? '7 days' : '30 days';
-    
+
     const expenseReport = await pool.query(
         `SELECT category, SUM(amount) as total
          FROM expenses
@@ -65,14 +84,17 @@ async function getReport(userId, period = 'month') {
         [userId, interval]
     );
 
-    const totalIncome = parseFloat(incomeRes.rows[0].total) || 0;
-    const totalExpense = parseFloat(expenseRes.rows[0].total) || 0;
+    const totalIncome = toNumber(incomeRes.rows[0].total);
+    const totalExpense = toNumber(expenseRes.rows[0].total);
 
     return {
-        expensesByCategory: expenseReport.rows,
+        expensesByCategory: expenseReport.rows.map((row) => ({
+            category: row.category,
+            total: toNumber(row.total),
+        })),
         totalIncome,
         totalExpense,
-        netBalance: totalIncome - totalExpense
+        netBalance: totalIncome - totalExpense,
     };
 }
 
@@ -104,28 +126,37 @@ async function checkExpenseLimit(userId) {
         FROM monthly_expenses, user_limit
     `, [userId]);
 
-    if (result.rows.length === 0) return null;
+    if (result.rows.length === 0) {
+        return null;
+    }
 
-    const { current_expenses, monthly_limit, notification_sent } = result.rows[0];
-    const limitExceeded = current_expenses >= monthly_limit;
+    const row = result.rows[0];
+    const currentExpenses = toNumber(row.current_expenses);
+    const monthlyLimit = toNumber(row.monthly_limit);
+    const notificationSent = !!row.notification_sent;
+    const limitExceeded = monthlyLimit > 0 && currentExpenses >= monthlyLimit;
 
-    if (limitExceeded && !notification_sent) {
+    let updatedNotificationSent = notificationSent;
+
+    if (limitExceeded && !notificationSent) {
         await pool.query(
             'UPDATE expense_limits SET notification_sent = true WHERE user_id = $1',
             [userId]
         );
-    } else if (!limitExceeded && notification_sent) {
+        updatedNotificationSent = true;
+    } else if (!limitExceeded && notificationSent) {
         await pool.query(
             'UPDATE expense_limits SET notification_sent = false WHERE user_id = $1',
             [userId]
         );
+        updatedNotificationSent = false;
     }
 
     return {
-        currentExpenses: current_expenses,
-        monthlyLimit: monthly_limit,
+        currentExpenses,
+        monthlyLimit,
         limitExceeded,
-        notificationSent: notification_sent
+        notificationSent: updatedNotificationSent,
     };
 }
 
@@ -134,7 +165,12 @@ async function getExpenseLimit(userId) {
         'SELECT monthly_limit FROM expense_limits WHERE user_id = $1',
         [userId]
     );
-    return result.rows[0]?.monthly_limit || null;
+
+    if (result.rows.length === 0) {
+        return null;
+    }
+
+    return toNumber(result.rows[0].monthly_limit);
 }
 
 module.exports = {
@@ -145,5 +181,5 @@ module.exports = {
     getReport,
     setExpenseLimit,
     checkExpenseLimit,
-    getExpenseLimit
+    getExpenseLimit,
 };
