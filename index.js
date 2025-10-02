@@ -403,6 +403,10 @@ async function ensureLanguage(ctx) {
     return DEFAULT_LANGUAGE;
 }
 
+async function exitActiveConversation(ctx) {
+    await ctx.conversation.exit().catch(() => {});
+}
+
 async function showMainMenu(ctx, editMessage = false) {
     const lang = getLanguage(ctx);
     const locale = getLocale(lang);
@@ -621,16 +625,19 @@ bot.on('callback_query:data', async (ctx) => {
     try {
         switch (action) {
             case 'add_expense_action':
+                await exitActiveConversation(ctx);
                 await ctx.reply(locale.prompts.expenseStart);
                 await ctx.conversation.enter('expenseConversation');
                 break;
 
             case 'add_income_action':
+                await exitActiveConversation(ctx);
                 await ctx.reply(locale.prompts.incomeStart);
                 await ctx.conversation.enter('incomeConversation');
                 break;
 
             case 'balance_action': {
+                await exitActiveConversation(ctx);
                 const { totalIncome, totalExpense, balance } = await db.getBalance(ctx.from.id);
                 const message = locale.responses.balanceSummary({
                     income: formatMoney(totalIncome, lang),
@@ -646,12 +653,14 @@ bot.on('callback_query:data', async (ctx) => {
             }
 
             case 'report_action': {
+                await exitActiveConversation(ctx);
                 const reportKeyboard = buildReportKeyboard(lang);
                 await ctx.reply(locale.prompts.reportPeriod, { reply_markup: reportKeyboard });
                 break;
             }
 
             case 'reset_balance_action': {
+                await exitActiveConversation(ctx);
                 const confirmKeyboard = buildResetConfirmKeyboard(lang);
                 await ctx.reply(locale.responses.resetPrompt, { reply_markup: confirmKeyboard });
                 break;
@@ -666,6 +675,7 @@ bot.on('callback_query:data', async (ctx) => {
             }
 
             case 'set_limit_action': {
+                await exitActiveConversation(ctx);
                 const currentLimit = await db.getExpenseLimit(ctx.from.id);
                 if (currentLimit) {
                     await ctx.reply(locale.responses.currentLimitInfo(formatMoney(currentLimit, lang)));
@@ -675,21 +685,25 @@ bot.on('callback_query:data', async (ctx) => {
             }
 
             case 'settings_action': {
+                await exitActiveConversation(ctx);
                 const settingsKeyboard = buildSettingsKeyboard(lang);
                 await ctx.reply(locale.prompts.settings, { reply_markup: settingsKeyboard });
                 break;
             }
 
             case 'change_language':
+                await exitActiveConversation(ctx);
                 await promptLanguageSelection(ctx, 'settings');
                 break;
 
             case 'back_to_main':
+                await exitActiveConversation(ctx);
                 await showMainMenu(ctx, true);
                 break;
 
             case 'report_week':
             case 'report_month': {
+                await exitActiveConversation(ctx);
                 const period = action.split('_')[1];
                 const periodLabel = period === 'week' ? locale.labels.periodWeek : locale.labels.periodMonth;
                 const report = await db.getReport(ctx.from.id, period);
