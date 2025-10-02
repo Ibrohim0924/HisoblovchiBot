@@ -2,6 +2,7 @@
 CREATE TABLE users (
     telegram_id BIGINT PRIMARY KEY,
     first_name VARCHAR(255) NOT NULL,
+    language VARCHAR(5) DEFAULT 'uz',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

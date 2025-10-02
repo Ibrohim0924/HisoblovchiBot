@@ -18,10 +18,21 @@ const pool = new Pool({
 });
 
 async function findOrCreateUser(userId, firstName) {
-    const res = await pool.query('SELECT telegram_id FROM users WHERE telegram_id = $1', [userId]);
+    const res = await pool.query('SELECT telegram_id, first_name FROM users WHERE telegram_id = $1', [userId]);
     if (res.rowCount === 0) {
         await pool.query('INSERT INTO users (telegram_id, first_name) VALUES ($1, $2)', [userId, firstName]);
+    } else if (firstName && res.rows[0].first_name !== firstName) {
+        await pool.query('UPDATE users SET first_name = $1 WHERE telegram_id = $2', [firstName, userId]);
     }
+}
+
+async function getUserLanguage(userId) {
+    const res = await pool.query('SELECT language FROM users WHERE telegram_id = $1', [userId]);
+    return res.rows[0]?.language || null;
+}
+
+async function setUserLanguage(userId, language) {
+    await pool.query('UPDATE users SET language = $1 WHERE telegram_id = $2', [language, userId]);
 }
 
 async function addIncome(userId, source, amount) {
@@ -191,6 +202,8 @@ async function getExpenseLimit(userId) {
 
 module.exports = {
     findOrCreateUser,
+    getUserLanguage,
+    setUserLanguage,
     addIncome,
     addExpense,
     resetBalance,
