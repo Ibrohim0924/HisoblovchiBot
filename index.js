@@ -281,15 +281,21 @@ function buildLanguageKeyboard() {
 }
 
 function getLanguage(ctx) {
+    if (!ctx || !ctx.session) {
+        return DEFAULT_LANGUAGE;
+    }
     const sessionLang = ctx.session.language;
     if (SUPPORTED_LANGUAGES.includes(sessionLang)) {
         return sessionLang;
+    }
+    if (SUPPORTED_LANGUAGES.includes(ctx.session.tempLanguage)) {
+        return ctx.session.tempLanguage;
     }
     return DEFAULT_LANGUAGE;
 }
 
 function getLocale(lang) {
-    return LOCALES[lang] || LOCALES[DEFAULT_LANGUAGE];
+    return LOCALES[SUPPORTED_LANGUAGES.includes(lang) ? lang : DEFAULT_LANGUAGE];
 }
 
 function formatMoney(amount, lang) {
@@ -377,6 +383,9 @@ async function loadLanguage(ctx) {
 }
 
 async function promptLanguageSelection(ctx, source = 'initial') {
+    if (!ctx.session) {
+        ctx.session = {};
+    }
     ctx.session.awaitingLanguage = source;
     await ctx.reply(LANGUAGE_PROMPT_TEXT, { reply_markup: buildLanguageKeyboard() });
 }
@@ -386,8 +395,12 @@ async function ensureLanguage(ctx) {
     if (lang) {
         return lang;
     }
+    if (!ctx.session) {
+        ctx.session = {};
+    }
+    ctx.session.tempLanguage = DEFAULT_LANGUAGE;
     await promptLanguageSelection(ctx, 'initial');
-    return null;
+    return DEFAULT_LANGUAGE;
 }
 
 async function showMainMenu(ctx, editMessage = false) {
@@ -625,6 +638,9 @@ bot.on('callback_query:data', async (ctx) => {
                     balance: formatMoney(balance, lang),
                 });
                 await ctx.reply(message, { parse_mode: 'HTML' });
+                if (ctx.session) {
+                    ctx.session.tempLanguage = ctx.session.language;
+                }
                 await showMainMenu(ctx);
                 break;
             }
@@ -708,7 +724,11 @@ bot.on('callback_query:data', async (ctx) => {
                 }
 
                 await db.setUserLanguage(ctx.from.id, selectedLang);
+                if (!ctx.session) {
+                    ctx.session = {};
+                }
                 ctx.session.language = selectedLang;
+                ctx.session.tempLanguage = selectedLang;
                 const previousStage = ctx.session.awaitingLanguage;
                 ctx.session.awaitingLanguage = null;
 
